@@ -29,7 +29,7 @@ summary = pd.merge(summary, genotype_zeros, how="left", on="Peptide")
 
 
 ## take subset
-summary = summary.sample(n=100)
+# summary = summary.sample(n=100)
 
 
 ## create dictionary of genotypes associated with each HLA
