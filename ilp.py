@@ -12,21 +12,8 @@ def main():
     
     ## load data
     path = 'C:\\Users\\Nika\\Downloads\\Organized\\Coronavirus-Epitopes\\'
-    summary = pd.read_pickle(path + 'summary-100.pkl')
+    summary = pd.read_pickle(path + 'summary.pkl')
     rows = summary.index.size
-    
-    
-    ## validate data
-    # all_values = []
-    # for column in summary.columns:
-    #     all_values.append(column[1])
-    #     all_values.extend(summary[column].unique())
-    # for value in all_values:
-    #     if isinstance(value, str) and value != "nan":
-    #         print(value)
-    #     if not isinstance(value, str) and value > affinity_threshold:
-    #         print(value)
-    # print(summary)
     
     
     ## solver
@@ -37,7 +24,7 @@ def main():
     x = {}
     for peptide in summary.index:
         x[peptide] = solver.NumVar(0, 1, peptide)
-
+        
 
     # constraints
     vaccine_size = solver.Constraint(0, max_peptides, "vaccine_size")
@@ -58,7 +45,7 @@ def main():
     # objective
     objective = solver.Objective()
     for peptide in summary.index:
-        df = summary.loc[peptide, "Genotypes_min"]
+        df = summary.loc[peptide, "Genotypes"]
         objective.SetCoefficient(x[peptide], int(df.min()))
     objective.SetMaximization()
 
