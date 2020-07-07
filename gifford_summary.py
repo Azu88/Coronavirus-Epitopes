@@ -1,6 +1,8 @@
 import pandas as pd
 import pickle
 
+import time
+
 
 ### notes
 # alleles should be consistent between affinity & frequency data
@@ -29,21 +31,23 @@ def load_frequency_dfs(path):
 
 
 ### generate dictionary of genotypes associated with each HLA allele
-# get set of genotypes associated with given allele
+# get list of genotypes associated with given allele
 def get_allele_genotypes(allele, frequency_df, genotype_threshold):
-    genotypes = set()
-    df = frequency_df.xs(allele, axis=1, level=1, drop_level=False)
-    df.columns = df.columns.droplevel()
-    df = df[df[allele] >= genotype_threshold]
-    for genotype in df.index:
-        genotypes.add(genotype)
+    genotypes = []
+    frequency_df = frequency_df[frequency_df[allele] >= genotype_threshold]
+    for genotype in frequency_df.index:
+        genotypes.append(genotype)
     return genotypes
 
-# iterate through all alleles and generate dictionary
+# iterate through all alleles and generate allele-genotype dictionary
 def generate_allele_genotype_dict(frequency_dfs, genotype_threshold):
     (freq_mhc1, freq_mhc2) = frequency_dfs
-    alleles_mhc1 = freq_mhc1.columns.get_level_values(1)
-    alleles_mhc2 = freq_mhc2.columns.get_level_values(1)
+    freq_mhc1.columns = freq_mhc1.columns.droplevel()
+    freq_mhc2.columns = freq_mhc2.columns.droplevel()
+    freq_mhc1 = freq_mhc1.drop(columns=["unknown"])
+    freq_mhc2 = freq_mhc2.drop(columns=["unknown"])
+    alleles_mhc1 = freq_mhc1.columns
+    alleles_mhc2 = freq_mhc2.columns
     
     allele_genotype_dict = dict()
 
@@ -77,12 +81,27 @@ def get_all_genotypes(frequency_dfs):
 #             if affinity > genotype_max:
 #                 summary.at[peptide, ("Genotypes_max", genotype)] = affinity
 
+# update peptide-genotype values to 1 if genotype is covered by peptide, 0 if not
+def update_genotype_cover(allele, peptide, affinity_df, objective_df, allele_genotype_dict, affinity_threshold):
+    affinity = affinity_df.at[peptide, allele]
+    if affinity >= affinity_threshold:
+        for genotype in allele_genotype_dict[allele]:
+            objective_df.at[peptide, ("Genotypes", genotype)] = 1
+
 ## main call
-# iterate through all peptides & alleles and generate dataframes
+# iterate through all peptides & alleles and generate objective dataframes
 def generate_objective_dfs(affinity_dfs, frequency_dfs, allele_genotype_dict, affinity_threshold):
     (affinity_mhc1, affinity_mhc2) = affinity_dfs
-    alleles_mhc1 = affinity_mhc1.columns.get_level_values(1)
-    alleles_mhc2 = affinity_mhc2.columns.get_level_values(1)
+    affinity_mhc1.columns = affinity_mhc1.columns.droplevel()
+    affinity_mhc2.columns = affinity_mhc2.columns.droplevel()
+    affinity_mhc1 = affinity_mhc1.drop(columns=["unknown"])
+    affinity_mhc2 = affinity_mhc2.drop(columns=["unknown"])
+    
+    # affinity_mhc1 = affinity_mhc1.sample(n=100) # FOR TESTING
+    # affinity_mhc2 = affinity_mhc2.sample(n=100) # FOR TESTING
+    
+    alleles_mhc1 = affinity_mhc1.columns
+    alleles_mhc2 = affinity_mhc2.columns
     
     # modify columns to fit desired data
     objective_columns = pd.MultiIndex.from_product([["Genotypes"], get_all_genotypes(frequency_dfs)])
@@ -90,20 +109,34 @@ def generate_objective_dfs(affinity_dfs, frequency_dfs, allele_genotype_dict, af
     mhc1 = pd.DataFrame(0, index=affinity_mhc1.index, columns=objective_columns)
     mhc2 = pd.DataFrame(0, index=affinity_mhc2.index, columns=objective_columns)
     
+    peptides = 1 # FOR TESTING
+    t = time.process_time() # FOR TESTING
+    
     for peptide in affinity_mhc1.index:
         for allele in alleles_mhc1:
             # modify function call to update desired data
-            pass
+            update_genotype_cover(allele, peptide, affinity_mhc1, mhc1, allele_genotype_dict, affinity_threshold)
+            
+        if peptides % 100 == 0: # FOR TESTING
+            print(peptides) # FOR TESTING
+            print(time.process_time() - t) # FOR TESTING
+        peptides += 1 # FOR TESTING
             
     for peptide in affinity_mhc2.index:
         for allele in alleles_mhc2:
             # modify function call to update desired data
-            pass            
+            update_genotype_cover(allele, peptide, affinity_mhc2, mhc2, allele_genotype_dict, affinity_threshold)            
+            
+        if peptides % 100 == 0: # FOR TESTING
+            print(peptides) # FOR TESTING
+            print(time.process_time() - t) # FOR TESTING
+        peptides += 1 # FOR TESTING
     
     return (mhc1, mhc2)
 
 
 ### create summary dataframe
+# merge objective dataframes for mhc1 and mhc2
 def merge_objective_dfs(objective_dfs):
     (objective_mhc1, objective_mhc2) = objective_dfs
     
@@ -111,6 +144,7 @@ def merge_objective_dfs(objective_dfs):
     
     return objective
 
+# merge feature and objective dataframes
 def create_summary_df(feature_df, objective_dfs):
     objective = merge_objective_dfs(objective_dfs)
 
@@ -123,13 +157,10 @@ def create_summary_df(feature_df, objective_dfs):
 
 
 ### store summmary dataframe
-def store_summary(summary_df, sample, n = 100):    
-    # take subset
-    if sample:
-        summary_df = summary_df.sample(n=n)
-
+# write summary dataframe to a file
+def store_summary(path, summary_df):    
     # store as pickle
-    summary_df.to_pickle(('summary-%d.pkl' % n) if sample else 'summary.pkl')
+    summary_df.to_pickle(path + 'summary.pkl')
 
 
 ### main
@@ -141,7 +172,7 @@ def main():
     feature_df = load_feature_df(path)
     summary_df = create_summary_df(feature_df, objective_dfs)
     print(summary_df)
-    store_summary(summary_df, sample=False)
+    store_summary(path, summary_df)
 
 if __name__ == '__main__':
     main()
