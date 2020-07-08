@@ -1,7 +1,7 @@
 import pandas as pd
 import pickle
 
-import time
+import time # FOR TESTING
 
 
 ### notes
@@ -22,11 +22,17 @@ def load_feature_df(path):
 def load_affinity_dfs(path):
     mhc1 = pd.read_pickle(path + 'dropbox_data\\mean2_mhc1_pred_affinity_pivot.pkl')
     mhc2 = pd.read_pickle(path + 'dropbox_data\\netmhc4.0_mhc2_pred_affinity_pivot.pkl')
+    # convert all values from float64 to float32
+    mhc1 = mhc1.apply(pd.to_numeric, downcast="float")
+    mhc2 = mhc2.apply(pd.to_numeric, downcast="float")
     return (mhc1, mhc2)
 
 def load_frequency_dfs(path):
     mhc1 = pd.read_pickle(path + 'IEDB_population_frequency2392_normalized.pkl')
     mhc2 = pd.read_pickle(path + 'IEDB_population_frequency_mhc2_275normalized.pkl')
+    # convert all values from float64 to float32
+    mhc1 = mhc1.apply(pd.to_numeric, downcast="float")
+    mhc2 = mhc2.apply(pd.to_numeric, downcast="float")
     return (mhc1, mhc2)
 
 
@@ -106,8 +112,8 @@ def generate_objective_dfs(affinity_dfs, frequency_dfs, allele_genotype_dict, af
     # modify columns to fit desired data
     objective_columns = pd.MultiIndex.from_product([["Genotypes"], get_all_genotypes(frequency_dfs)])
     
-    mhc1 = pd.DataFrame(0, index=affinity_mhc1.index, columns=objective_columns)
-    mhc2 = pd.DataFrame(0, index=affinity_mhc2.index, columns=objective_columns)
+    mhc1 = pd.DataFrame(0, index=affinity_mhc1.index, columns=objective_columns), dtype="int32")
+    mhc2 = pd.DataFrame(0, index=affinity_mhc2.index, columns=objective_columns), dtype="int32")
     
     peptides = 1 # FOR TESTING
     t = time.process_time() # FOR TESTING
